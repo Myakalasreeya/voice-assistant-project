@@ -1,0 +1,89 @@
+import cv2
+import os
+import pyttsx3  # Import pyttsx3 for speech synthesis
+from ultralytics import YOLO
+import time
+import requests
+
+
+# Initialize the TTS engine
+engine = pyttsx3.init()
+
+# Load YOLO model
+model = YOLO("yolo11n.pt")  # Replace with your model file
+
+last_detected = None
+sos_triggered = False
+confidence_threshold = 0.72
+
+def speak(text):
+    engine.say(text)  # Speak the text
+    engine.runAndWait()  # Wait for the speech to complete
+
+def sos_alert():
+    global sos_triggered
+    if not sos_triggered:
+        sos_triggered = True
+        url ='http://raspberrypi.microembeddedtech.com/queryconnect.php'
+        onebitstr = "1"
+        dupdate = "UPDATE `ambsosalert` SET `sosbit`= '" + onebitstr + "'  WHERE 1"
+        upobj = {'query': dupdate, 'key': 'querykey'}
+        requests.post(url, data=upobj)
+
+        speak("S O S Alert!")
+        sos_triggered = False
+
+# Start camera
+cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    print("❌ Could not open camera.")
+    exit()
+
+print("✅ Camera running. Press 's' for SOS alert. Press 'q' to quit.")
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        print("⚠️ Failed to grab frame.")
+        break
+
+    results = model(frame, verbose=False)
+    names = model.names
+
+    detected_objects = []
+    detected_name_to_speak = None
+
+    for r in results:
+        for box in r.boxes:
+            cls = int(box.cls[0])
+            conf = float(box.conf[0])
+
+            if conf >= confidence_threshold:
+                name = names[cls]
+                detected_objects.append((name, conf))
+
+                # Draw box manually
+                xyxy = box.xyxy[0].cpu().numpy().astype(int)
+                x1, y1, x2, y2 = xyxy
+                label = f"{name} ({conf:.2f})"
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+                if detected_name_to_speak is None and name != last_detected:
+                    detected_name_to_speak = name
+                    last_detected = name
+
+    if detected_name_to_speak:
+        speak(detected_name_to_speak)
+
+    cv2.imshow("YOLOv11l Detection", frame)
+
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord('q'):
+        break
+    elif key == ord('s') or key == ord('S'):
+        sos_alert()
+
+# Cleanup
+cap.release()
+cv2.destroyAllWindows()
