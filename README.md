@@ -104,12 +104,5 @@ Future Enhancements
 
 ---
 
-Developed By
 
-- G. Yamini Siri[160621737301]
-- S. Akshitha[1606021737047]
-- M. Sreeya[160621737305]
 
-Stanley College of engineering and technology for women
-Information technology
-2025
